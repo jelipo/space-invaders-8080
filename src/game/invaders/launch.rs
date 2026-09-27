@@ -64,11 +64,8 @@ impl Launch for InvadersLaunch {
                         break;
                     }
                 }
-                let key_option = video.update_cycle();
-                match key_option {
-                    Some(key) => loop_io.borrow_mut().set_input_temp(key),
-                    None => loop_io.borrow_mut().clean_temp(),
-                }
+                let keys = video.update_cycle();
+                loop_io.borrow_mut().set_input_temp(keys);
 
                 fps_temp += 1;
                 let time_now = get_mill_time();
