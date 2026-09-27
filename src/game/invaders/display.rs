@@ -21,7 +21,7 @@ impl Display {
             WIDTH,
             HEIGHT,
             WindowOptions {
-                borderless: true,
+                borderless: false,
                 transparency: false,
                 title: true,
                 resize: false,
@@ -44,8 +44,7 @@ impl Display {
     /// This is block method
     pub fn start(&mut self) {
         // 限制最高60帧
-        self.window
-            .limit_update_rate(Some(std::time::Duration::from_micros(16667)));
+        self.window.set_target_fps(60);
 
         let mut lasttime = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
@@ -103,5 +102,5 @@ impl Display {
 }
 
 fn get_color(bit: u8) -> u32 {
-    return if bit == 0 { 0 } else { u32::max_value() };
+    return if bit == 0 { 0 } else { u32::MAX };
 }

@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::mem;
 use std::rc::Rc;
 
-use crate::cpu::IO;
 use crate::cpu::register::Register;
+use crate::cpu::IO;
 use crate::memory::address::AddressBus;
 use crate::util::U16Util;
 
@@ -224,12 +224,11 @@ impl Cpu {
     }
 
     /// 根据跳转判断是否做 JMP 操作
-    fn condition_jmp(&mut self, condition: bool) -> bool {
+    fn condition_jmp(&mut self, condition: bool) {
         let word = self.get_next_word();
         if condition {
             self.register.pc = word;
         }
-        condition
     }
 
     /// 根据跳转判断是否做 CALL 操作
@@ -256,7 +255,8 @@ impl Cpu {
     /// 下一步指令
     pub fn next(&mut self) -> u8 {
         let op_code = self.get_next_byte();
-        let mut ex_cycle: bool = true;
+        // 条件 CALL/RET 实际执行时才额外增加 6 个周期。
+        let mut ex_cycle: bool = false;
         match op_code {
             // NOP          1
             0x00 => { /* Nothing */ }
@@ -722,6 +722,7 @@ impl Cpu {
             0xc0 => {
                 if !self.register.flag_z {
                     self.register.pc = self.stack_pop();
+                    ex_cycle = true;
                 }
             }
             // POP B        1                       C <- (sp); B <- (sp+1); sp <- sp+2
@@ -730,7 +731,7 @@ impl Cpu {
                 self.register.set_bc(value);
             }
             // JNZ adr      3                       if NZ, PC <- adr
-            0xc2 => ex_cycle = self.condition_jmp(!self.register.flag_z),
+            0xc2 => self.condition_jmp(!self.register.flag_z),
             // JMP adr      3                       PC <= adr
             0xc3 => self.jmp(),
             // CNZ adr      3                       if NZ, CALL adr
@@ -748,12 +749,13 @@ impl Cpu {
             0xc8 => {
                 if self.register.flag_z {
                     self.register.pc = self.stack_pop();
+                    ex_cycle = true;
                 }
             }
             // RET          1                       PC.lo <- (sp); PC.hi<-(sp+1); SP <- SP+2
             0xc9 => self.register.pc = self.stack_pop(),
             // JZ adr       3                       if Z, PC <- adr
-            0xca => ex_cycle = self.condition_jmp(self.register.flag_z),
+            0xca => self.condition_jmp(self.register.flag_z),
             // -
             0xcb => {
                 eprintln!("未实现 {:#04X}", op_code);
@@ -775,6 +777,7 @@ impl Cpu {
             0xd0 => {
                 if !self.register.flag_cy {
                     self.register.pc = self.stack_pop();
+                    ex_cycle = true;
                 }
             }
             // POP D        1                       E <- (sp); D <- (sp+1); sp <- sp+2
@@ -783,7 +786,7 @@ impl Cpu {
                 self.register.set_de(value);
             }
             // JNC adr      3                       if NCY, PC<-adr
-            0xd2 => ex_cycle = self.condition_jmp(!self.register.flag_cy),
+            0xd2 => self.condition_jmp(!self.register.flag_cy),
             // OUT D8       2                       special
             0xd3 => {
                 //eprintln!("未完整实现 {:#04X}", op_code);
@@ -804,12 +807,13 @@ impl Cpu {
             0xd8 => {
                 if self.register.flag_cy {
                     self.register.pc = self.stack_pop();
+                    ex_cycle = true;
                 }
             }
             // - 0xC9
             0xd9 => self.register.pc = self.stack_pop(),
             // JC adr       3                       if CY, PC<-adr
-            0xda => ex_cycle = self.condition_jmp(self.register.flag_cy),
+            0xda => self.condition_jmp(self.register.flag_cy),
             // IN D8        2                       special
             0xdb => {
                 let byte = self.get_next_byte();
@@ -831,6 +835,7 @@ impl Cpu {
             0xe0 => {
                 if !self.register.flag_p {
                     self.register.pc = self.stack_pop();
+                    ex_cycle = true;
                 }
             }
             // POP H        1                       L <- (sp); H <- (sp+1); sp <- sp+2
@@ -839,7 +844,7 @@ impl Cpu {
                 self.register.set_hl(value);
             }
             // JPO adr      3                       if PO, PC <- adr
-            0xe2 => ex_cycle = self.condition_jmp(!self.register.flag_p),
+            0xe2 => self.condition_jmp(!self.register.flag_p),
             // XTHL         1                       L <-> (SP); H <-> (SP+1)
             0xe3 => {
                 let addr = self.addring.get_word(self.register.sp);
@@ -862,12 +867,13 @@ impl Cpu {
             0xe8 => {
                 if self.register.flag_p {
                     self.register.pc = self.stack_pop();
+                    ex_cycle = true;
                 }
             }
             // PCHL         1                       PC.hi <- H; PC.lo <- L
             0xe9 => self.register.pc = self.register.get_hl(),
             // JPE adr      3                       if PE, PC <- adr
-            0xea => ex_cycle = self.condition_jmp(self.register.flag_p),
+            0xea => self.condition_jmp(self.register.flag_p),
             // XCHG         1                       H <-> D; L <-> E
             0xeb => {
                 mem::swap(&mut self.register.h, &mut self.register.d);
@@ -888,6 +894,7 @@ impl Cpu {
             0xf0 => {
                 if !self.register.flag_s {
                     self.register.pc = self.stack_pop();
+                    ex_cycle = true;
                 }
             }
             // POP PSW      1                       flags <- (sp); A <- (sp+1); sp <- sp+2
@@ -896,8 +903,8 @@ impl Cpu {
                 self.register.a = (value >> 8) as u8;
                 self.register.set_flags((value & 0x00d5 | 0x0002) as u8);
             }
-            // JP adr       3                       if P=1 PC <- adr
-            0xf2 => ex_cycle = self.condition_jmp(self.register.flag_s),
+            // JP adr       3                       if S=0, PC <- adr
+            0xf2 => self.condition_jmp(!self.register.flag_s),
             // DI           1                       special
             0xf3 => self.interrupt = false,
             // CP adr       3                       if P, PC <- adr    Call if  Plus
@@ -919,12 +926,13 @@ impl Cpu {
             0xf8 => {
                 if self.register.flag_s {
                     self.register.pc = self.stack_pop();
+                    ex_cycle = true;
                 }
             }
             // SPHL         1                       SP=HL
             0xf9 => self.register.sp = self.register.get_hl(),
             // JM adr       3                       if M, PC <- adr
-            0xfa => ex_cycle = self.condition_jmp(self.register.flag_s),
+            0xfa => self.condition_jmp(self.register.flag_s),
             // EI           1                       special
             0xfb => self.interrupt = true,
             // CM adr       3                       if M, CALL adr   Call If Minus
@@ -940,21 +948,21 @@ impl Cpu {
             0xff => self.rst(op_code),
             n => println!("unknow opcode 0x{:X}", n),
         };
-        return if ex_cycle {
+        if ex_cycle {
             OP_CYCLES[op_code as usize] + 6
         } else {
             OP_CYCLES[op_code as usize]
-        };
+        }
     }
 
     pub fn interrupt(&mut self, code: u8) -> bool {
-        return if self.interrupt {
+        if self.interrupt {
             self.rst(code);
             self.interrupt = false;
             true
         } else {
             false
-        };
+        }
     }
 }
 
