@@ -56,24 +56,12 @@ impl Display {
         }
     }
 
-    pub fn update_cycle(&mut self) -> Option<Key> {
+    pub fn update_cycle(&mut self) -> Vec<Key> {
         self.set_buffer(self.video_arr.clone());
         self.window
             .update_with_buffer(&self.buffer, WIDTH, HEIGHT)
             .unwrap();
-        return if self.window.is_key_down(Key::Left) {
-            Some(Key::Left)
-        } else if self.window.is_key_down(Key::Right) {
-            Some(Key::Right)
-        } else if self.window.is_key_down(Key::Space) {
-            Some(Key::Space)
-        } else if self.window.is_key_down(Key::Enter) {
-            Some(Key::Enter)
-        } else if self.window.is_key_down(Key::C) {
-            Some(Key::C)
-        } else {
-            None
-        };
+        self.window.get_keys()
     }
 
     fn set_buffer(&mut self, video_arr: Rc<RefCell<Vec<u8>>>) {
