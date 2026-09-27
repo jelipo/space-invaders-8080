@@ -1,10 +1,8 @@
 use std::cell::RefCell;
-use std::fs::File;
-use std::io::Read;
 use std::rc::Rc;
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::{io, thread};
+use std::thread;
 
 use crate::cpu::Cpu;
 use crate::game::invaders::display::Display;
@@ -21,7 +19,7 @@ impl Launch for InvadersLaunch {
         let video_arr = Rc::new(RefCell::new(gpu_ram));
         let video_arr_cloned = video_arr.clone();
 
-        let addressing = init_address(video_arr_cloned).unwrap();
+        let addressing = init_address(video_arr_cloned);
 
         let io = Rc::new(RefCell::new(InvadersIO::new()));
         let mut cpu = Cpu::new(Box::new(addressing), 0, io.clone());
@@ -114,29 +112,12 @@ impl InvadersLaunch {
     }
 }
 
-fn init_address(video_arr: Rc<RefCell<Vec<u8>>>) -> io::Result<InvadersAddressBus> {
-    let mut arr_h = [0u8; 2048];
-    let mut h = File::open("./res/invaders.h")?;
-    h.read_exact(&mut arr_h)?;
-
-    let mut arr_g = [0u8; 2048];
-    let mut g = File::open("./res/invaders.g")?;
-    g.read_exact(&mut arr_g)?;
-
-    let mut arr_f = [0u8; 2048];
-    let mut f = File::open("./res/invaders.f")?;
-    f.read_exact(&mut arr_f)?;
-
-    let mut arr_e = [0u8; 2048];
-    let mut e = File::open("./res/invaders.e")?;
-    e.read_exact(&mut arr_e)?;
-
-    let addressing = InvadersAddressBus::new(
-        Box::new(arr_h),
-        Box::new(arr_g),
-        Box::new(arr_f),
-        Box::new(arr_e),
+fn init_address(video_arr: Rc<RefCell<Vec<u8>>>) -> InvadersAddressBus {
+    InvadersAddressBus::new(
+        Box::new(*include_bytes!("../../../res/invaders.h")),
+        Box::new(*include_bytes!("../../../res/invaders.g")),
+        Box::new(*include_bytes!("../../../res/invaders.f")),
+        Box::new(*include_bytes!("../../../res/invaders.e")),
         video_arr,
-    );
-    Ok(addressing)
+    )
 }
